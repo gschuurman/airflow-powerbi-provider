@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "airflow-powerbi-provider"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
   { name="Glenn Schuurman", email="info@schuurman-it.com" },
 ]

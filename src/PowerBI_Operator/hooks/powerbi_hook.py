@@ -53,16 +53,16 @@ class PowerBIHook(BaseHook):
         Retrieve the access token used to authenticate against the API.
         """
         connection = self.get_connection(self.conn_id)
-        client_id = connection.extra.get("client_id")
-        client_secret = connection.extra.get("client_secret")
+        client_id = connection.login
+        client_secret = connection.password
         tenant_id = connection.extra.get("tenant_id")
 
         if not client_id:
-            raise ValueError("The key client_id is missing")
+            raise ValueError("The login is missing")
         if not client_secret:
-            raise ValueError("The key client_secret is missing")
-        if not client_secret:
-            raise ValueError("The key client_secret is missing")
+            raise ValueError("The password is missing")
+        if not tenant_id:
+            raise ValueError("The key tenant_id is missing in the extra field")
 
         credential = ClientSecretCredential(
             client_id=client_id,

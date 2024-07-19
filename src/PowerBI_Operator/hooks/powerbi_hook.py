@@ -176,7 +176,7 @@ class PowerBIHook(BaseHook):
         start_time = time.monotonic()
 
         while (
-                dataset_refresh_status not in {"Failed", "Completed"}
+                dataset_refresh_status not in ["Failed", "Completed"]
                 or dataset_refresh_status not in expected_status
         ):
             # Check if the dataset-refresh duration has exceeded the ``timeout`` configured.

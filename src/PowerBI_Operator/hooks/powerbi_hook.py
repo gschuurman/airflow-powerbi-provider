@@ -55,7 +55,7 @@ class PowerBIHook(BaseHook):
         connection = self.get_connection(self.conn_id)
         client_id = connection.login
         client_secret = connection.password
-        tenant_id = connection.extra.get("tenant_id")
+        tenant_id = connection.extra_dejson.get("tenant_id")
 
         if not client_id:
             raise ValueError("The login is missing")

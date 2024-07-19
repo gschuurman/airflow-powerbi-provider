@@ -171,14 +171,10 @@ class PowerBIHook(BaseHook):
         :return: Boolean indicating if the dataset refresh has reached the ``expected_status`` before the timeout.
         """
         dataset_refresh_details = self.get_refresh_details_by_request_id(request_id=request_id)
-        dataset_refresh_status = dataset_refresh_details.status
 
         start_time = time.monotonic()
 
-        while (
-                dataset_refresh_status not in ["Failed", "Completed"]
-                or dataset_refresh_status not in expected_status
-        ):
+        while dataset_refresh_details.status not in ["Failed", "Completed", expected_status]:
             # Check if the dataset-refresh duration has exceeded the ``timeout`` configured.
             if start_time + timeout < time.monotonic():
                 raise PowerBIDatasetRefreshException(
@@ -187,10 +183,11 @@ class PowerBIHook(BaseHook):
 
             time.sleep(check_interval)
 
-            dataset_refresh_details = self.get_refresh_details_by_request_id(request_id=request_id)
-            dataset_refresh_status = dataset_refresh_details.status
+            dataset_refresh_details: PowerBiDatasetRefreshDetails = self.get_refresh_details_by_request_id(
+                request_id=request_id
+            )
 
-        return dataset_refresh_status in expected_status
+        return dataset_refresh_details.status in expected_status
 
     def trigger_dataset_refresh(self, wait_for_termination: bool) -> str:
         """

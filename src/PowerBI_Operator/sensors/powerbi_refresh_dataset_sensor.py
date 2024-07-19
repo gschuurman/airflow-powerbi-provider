@@ -2,7 +2,7 @@ from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.decorators import apply_defaults
 
 from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook
-from PowerBI_Operator.models.powerbi_models import PowerBIDatasetRefreshException
+from PowerBI_Operator.models.powerbi_models import PowerBIDatasetRefreshException, PowerBiDatasetRefreshDetails
 
 
 class PowerBIDatasetRefreshSensor(BaseSensorOperator):
@@ -34,7 +34,8 @@ class PowerBIDatasetRefreshSensor(BaseSensorOperator):
             key="powerbi_dataset_refresh_id"
         )
 
-        refresh_status = hook.get_refresh_details_by_request_id(refresh_id)
+        refresh_status_details: PowerBiDatasetRefreshDetails = hook.get_refresh_details_by_request_id(refresh_id)
+        refresh_status: str = refresh_status_details.status
 
         self.log.info(f"Current status: {refresh_status}")
 

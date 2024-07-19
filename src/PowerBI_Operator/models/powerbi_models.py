@@ -1,8 +1,10 @@
+from dataclasses import dataclass
+
 from airflow.exceptions import AirflowException
-from airflow.utils.pydantic import BaseModel
 
 
-class PowerBiDatasetRefreshDetails(BaseModel):
+@dataclass
+class PowerBiDatasetRefreshDetails():
     request_id: str
     status: str
     end_time: str

@@ -1,4 +1,3 @@
-"""Standard Library imports"""
 import time
 from typing import Union
 

@@ -105,8 +105,8 @@ class PowerBIHook(BaseHook):
         return PowerBiDatasetRefreshDetails(
             request_id=refresh_details.get("requestId").replace("'", ""),
             status=refresh_details.get("status").replace("'", ""),
-            end_time=refresh_details.get("endTime").replace("'", ""),
-            error=refresh_details.get("serviceExceptionJson"),
+            end_time=refresh_details.get("endTime").replace("'", "") if refresh_details.get("endTime") else None,
+            error=refresh_details.get("serviceExceptionJson") if refresh_details.get("serviceExceptionJson") else None
         )
 
     def get_latest_refresh_details(self) -> Union[PowerBiDatasetRefreshDetails, None]:

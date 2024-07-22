@@ -7,8 +7,8 @@ from airflow.exceptions import AirflowException
 class PowerBiDatasetRefreshDetails:
     request_id: str
     status: str
-    end_time: str
-    error: str
+    end_time: str | None
+    error: str | None
 
 
 class PowerBIDatasetRefreshException(AirflowException):

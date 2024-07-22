@@ -101,11 +101,12 @@ class PowerBIHook(BaseHook):
 
         :param refresh_details: Raw object of refresh details.
         """
+
         return PowerBiDatasetRefreshDetails(
-            request_id=refresh_details.get("requestId"),
-            status=refresh_details.get("status"),
-            end_time=refresh_details.get("endTime"),
-            error=refresh_details.get("serviceExceptionJson"),
+            request_id=refresh_details.get("requestId").get("status").replace("'", ""),
+            status=refresh_details.get("status").replace("'", ""),
+            end_time=refresh_details.get("endTime").get("status").replace("'", ""),
+            error=refresh_details.get("serviceExceptionJson").get("status").replace("'", ""),
         )
 
     def get_latest_refresh_details(self) -> Union[PowerBiDatasetRefreshDetails, None]:

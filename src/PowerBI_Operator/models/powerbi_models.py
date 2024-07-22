@@ -4,7 +4,7 @@ from airflow.exceptions import AirflowException
 
 
 @dataclass
-class PowerBiDatasetRefreshDetails():
+class PowerBiDatasetRefreshDetails:
     request_id: str
     status: str
     end_time: str

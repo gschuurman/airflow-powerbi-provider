@@ -39,9 +39,7 @@ class PowerBIDatasetRefreshSensor(BaseSensorOperator):
 
         self.log.info(f"Current status: {refresh_status}")
 
-        termination_flag = refresh_status in ["Failed", "Completed"]
-
-        if termination_flag:
+        if refresh_status == "Completed":
             self.xcom_push(
                 context=context,
                 key="powerbi_dataset_refresh_status",

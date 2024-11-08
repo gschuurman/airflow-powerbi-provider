@@ -49,8 +49,9 @@ class PowerBIDatasetRefreshSensor(BaseSensorOperator):
             )
 
         if refresh_status == "Failed":
+            self.log.error("")
             raise PowerBIDatasetRefreshException(
-                "Dataset refresh has failed"
+                refresh_status_details.error
             )
 
         return termination_flag

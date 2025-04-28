@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "airflow-powerbi-provider"
-version = "1.0.8"
+version = "1.1.0"
 authors = [
   { name="Glenn Schuurman", email="info@schuurman-it.com" },
 ]
@@ -16,7 +16,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License"
 ]
 dependencies = [
-    "apache-airflow>=2.9.3",
+    "apache-airflow>=3.0.0",
     "azure-identity>=1.17.1"
 ]
 

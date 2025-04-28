@@ -5,7 +5,6 @@ from typing import Sequence
 from airflow.models import BaseOperator
 from airflow.models import BaseOperatorLink  # type: ignore
 from airflow.utils.context import Context
-from airflow.utils.decorators import apply_defaults
 
 from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook
 
@@ -32,7 +31,6 @@ class PowerBIDatasetRefreshOperator(BaseOperator):
     )
     template_fields_renderers = {"parameters": "json"}
 
-    @apply_defaults
     def __init__(
             self,
             conn_id: str,

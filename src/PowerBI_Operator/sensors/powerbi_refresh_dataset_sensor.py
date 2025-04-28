@@ -1,12 +1,10 @@
 from airflow.sensors.base import BaseSensorOperator
-from airflow.utils.decorators import apply_defaults
 
 from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook
 from PowerBI_Operator.models.powerbi_models import PowerBIDatasetRefreshException, PowerBiDatasetRefreshDetails
 
 
 class PowerBIDatasetRefreshSensor(BaseSensorOperator):
-    @apply_defaults
     def __init__(
             self,
             conn_id,
@@ -42,8 +40,7 @@ class PowerBIDatasetRefreshSensor(BaseSensorOperator):
         termination_flag = refresh_status in ["Failed", "Completed"]
 
         if termination_flag:
-            self.xcom_push(
-                context=context,
+            context["ti"].xcom_push(
                 key="powerbi_dataset_refresh_status",
                 value=refresh_status,
             )

@@ -1,4 +1,4 @@
-from airflow.sensors.base import BaseSensorOperator
+from airflow.sdk.bases.sensor import BaseSensorOperator
 
 from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook
 from PowerBI_Operator.models.powerbi_models import PowerBIDatasetRefreshException, PowerBiDatasetRefreshDetails

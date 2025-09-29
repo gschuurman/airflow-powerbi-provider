@@ -3,7 +3,7 @@ from typing import Union
 
 import requests  # type: ignore
 from airflow.exceptions import AirflowException
-from airflow.hooks.base import BaseHook
+from airflow.sdk.bases.hook import BaseHook
 from azure.identity import ClientSecretCredential
 
 from PowerBI_Operator.models.powerbi_models import PowerBIDatasetRefreshException, PowerBiDatasetRefreshDetails

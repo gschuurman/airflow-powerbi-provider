@@ -66,8 +66,7 @@ class PowerBIDatasetRefreshOperator(BaseOperator):
         Refresh the Power BI Dataset
         """
         request_id = self.hook.trigger_dataset_refresh(self.wait_for_termination)
-        self.xcom_push(
-            context=context,
+        context["ti"].xcom_push(
             key="powerbi_dataset_refresh_id",
             value=request_id
         )

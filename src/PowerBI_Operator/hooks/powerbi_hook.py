@@ -16,6 +16,9 @@ class PowerBIHook(BaseHook):
     :param dataset_id: The dataset id.
     :param group_id: The workspace id.
     """
+    conn_type: str = "power_bi"
+    conn_name_attr: str = "conn_id"
+    default_conn_name: str = "powerbi_default"
     hook_name: str = "Power BI"
 
     def __init__(

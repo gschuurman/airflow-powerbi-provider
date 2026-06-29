@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
-from airflow.utils.context import Context
 from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook
 from PowerBI_Operator.operators.powerbi_refresh_dataset_operator import PowerBIDatasetRefreshOperator
 
@@ -21,8 +20,7 @@ class TestPowerBIDatasetRefreshOperator(unittest.TestCase):
             wait_for_termination=True
         )
 
-        context = MagicMock(spec=Context)
-        context.xcom_push = MagicMock()  # Ensure the mock context has xcom_push method
+        context = {"ti": MagicMock()}
 
         operator.execute(context)
 

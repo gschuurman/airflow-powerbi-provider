@@ -1,3 +1,4 @@
+"""Hook for triggering and monitoring Power BI dataset refreshes."""
 import time
 from typing import Union
 
@@ -27,6 +28,19 @@ class PowerBIHook(BaseHook):
             dataset_id: str,
             group_id: str,
     ):
+        """
+        Initialize the hook with a connection id and target dataset/workspace.
+
+        :param conn_id: Airflow connection id holding the Power BI service principal
+            credentials (client id as login, client secret as password, tenant id
+            in ``extra`` under either ``tenant_id`` or ``tenantId``).
+        :param dataset_id: The dataset id.
+        :param group_id: The workspace id.
+
+        Example::
+
+            hook = PowerBIHook(conn_id="powerbi_default", dataset_id="abc123", group_id="def456")
+        """
         self.conn_id = conn_id
         self.dataset_id = dataset_id
         self.group_id = group_id
@@ -58,14 +72,15 @@ class PowerBIHook(BaseHook):
         connection = self.get_connection(self.conn_id)
         client_id = connection.login
         client_secret = connection.password
-        tenant_id = connection.extra_dejson.get("tenant_id")
+        extra = connection.extra_dejson
+        tenant_id = extra.get("tenant_id") or extra.get("tenantId")
 
         if not client_id:
             raise ValueError("The login is missing")
         if not client_secret:
             raise ValueError("The password is missing")
         if not tenant_id:
-            raise ValueError("The key tenant_id is missing in the extra field")
+            raise ValueError("The key tenant_id (or tenantId) is missing in the extra field")
 
         credential = ClientSecretCredential(
             client_id=client_id,

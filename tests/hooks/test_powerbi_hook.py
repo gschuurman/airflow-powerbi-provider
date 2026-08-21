@@ -93,6 +93,45 @@ class TestPowerBIHook(unittest.TestCase):
         self.assertEqual(request_id, 'test_request_id')
         mock_wait_for_dataset_refresh_status.assert_called_once()
 
+    @patch('PowerBI_Operator.hooks.powerbi_hook.ClientSecretCredential')
+    @patch('PowerBI_Operator.hooks.powerbi_hook.PowerBIHook.get_connection')
+    def test_get_token_accepts_snake_case_tenant_id(self, mock_get_connection, mock_credential):
+        mock_get_connection.return_value = MagicMock(
+            login='client_id', password='client_secret',
+            extra_dejson={'tenant_id': 'tenant-snake'}
+        )
+        mock_credential.return_value.get_token.return_value = MagicMock(token='test_token')
+
+        self.hook._get_token()
+
+        mock_credential.assert_called_once_with(
+            client_id='client_id', client_secret='client_secret', tenant_id='tenant-snake'
+        )
+
+    @patch('PowerBI_Operator.hooks.powerbi_hook.ClientSecretCredential')
+    @patch('PowerBI_Operator.hooks.powerbi_hook.PowerBIHook.get_connection')
+    def test_get_token_accepts_camel_case_tenant_id(self, mock_get_connection, mock_credential):
+        mock_get_connection.return_value = MagicMock(
+            login='client_id', password='client_secret',
+            extra_dejson={'tenantId': 'tenant-camel'}
+        )
+        mock_credential.return_value.get_token.return_value = MagicMock(token='test_token')
+
+        self.hook._get_token()
+
+        mock_credential.assert_called_once_with(
+            client_id='client_id', client_secret='client_secret', tenant_id='tenant-camel'
+        )
+
+    @patch('PowerBI_Operator.hooks.powerbi_hook.PowerBIHook.get_connection')
+    def test_get_token_raises_when_tenant_id_missing(self, mock_get_connection):
+        mock_get_connection.return_value = MagicMock(
+            login='client_id', password='client_secret', extra_dejson={}
+        )
+
+        with self.assertRaises(ValueError):
+            self.hook._get_token()
+
     @patch('PowerBI_Operator.hooks.powerbi_hook.requests.post')
     @patch('PowerBI_Operator.hooks.powerbi_hook.requests.get')
     @patch('PowerBI_Operator.hooks.powerbi_hook.PowerBIHook._get_token')

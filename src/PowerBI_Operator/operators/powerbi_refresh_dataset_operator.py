@@ -4,7 +4,7 @@ from typing import Sequence
 
 from airflow.models import BaseOperator
 from airflow.models import BaseOperatorLink  # type: ignore
-from airflow.utils.context import Context
+from airflow.sdk.definitions.context import Context
 
 from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook
 
@@ -42,6 +42,26 @@ class PowerBIDatasetRefreshOperator(BaseOperator):
             *args,
             **kwargs,
     ) -> None:
+        """
+        Initialize the operator with connection, target dataset, and wait behavior.
+
+        :param conn_id: Airflow connection id holding the Power BI service principal credentials.
+        :param dataset_id: The dataset id.
+        :param group_id: The workspace id.
+        :param wait_for_termination: Wait until the pre-existing or current triggered refresh completes before exiting.
+        :param timeout: Time in seconds to wait for a dataset to reach a terminal status. Used only if ``wait_for_termination`` is True.
+        :param check_interval: Number of seconds to wait before rechecking the refresh status.
+
+        Example::
+
+            PowerBIDatasetRefreshOperator(
+                task_id="refresh_dataset",
+                conn_id="powerbi_default",
+                dataset_id="abc123",
+                group_id="def456",
+                wait_for_termination=True,
+            )
+        """
         super(PowerBIDatasetRefreshOperator, self).__init__(*args, **kwargs)
         self.conn_id = conn_id
         self.dataset_id = dataset_id

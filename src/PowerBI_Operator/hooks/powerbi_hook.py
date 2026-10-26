@@ -5,9 +5,33 @@ from typing import Union
 import requests  # type: ignore
 from airflow.exceptions import AirflowException
 from airflow.sdk.bases.hook import BaseHook
+from azure.core.exceptions import ServiceRequestError, ServiceResponseError
 from azure.identity import ClientSecretCredential
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from PowerBI_Operator.models.powerbi_models import PowerBIDatasetRefreshException, PowerBiDatasetRefreshDetails
+
+# HTTP status codes of throttling and server errors that are worth retrying.
+RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
+
+
+def is_transient_error(error: Exception) -> bool:
+    """
+    Check whether an error raised while calling Power BI or Azure AD is transient.
+
+    Transient errors are dropped connections, timeouts and throttling/server
+    errors that are still failing once the request level retries are exhausted.
+    Errors like authentication failures or a 404 are not transient.
+
+    :param error: The raised exception.
+    :return: ``True`` if retrying the call later may succeed.
+    """
+    if isinstance(error, requests.HTTPError):
+        return error.response is not None and error.response.status_code in RETRY_STATUS_CODES
+    if isinstance(error, requests.exceptions.SSLError):
+        return False
+    return isinstance(error, (requests.ConnectionError, requests.Timeout, ServiceRequestError, ServiceResponseError))
 
 
 class PowerBIHook(BaseHook):
@@ -47,6 +71,18 @@ class PowerBIHook(BaseHook):
         self.header = None
         self._api_version = "v1.0"
         self._base_url = "https://api.powerbi.com"
+        # (connect, read) timeout in seconds, so a hanging connection cannot block a task forever.
+        self._timeout = (10, 60)
+        # Retries connection errors and throttling/server errors. POST is not in the default
+        # allowed_methods, so a refresh is never triggered twice after the request was sent.
+        self._retry = Retry(
+            total=5,
+            backoff_factor=2,
+            status_forcelist=RETRY_STATUS_CODES,
+            raise_on_status=False,
+        )
+        self._session: Union[requests.Session, None] = None
+        self._credential: Union[ClientSecretCredential, None] = None
         super().__init__()
 
     def refresh_dataset(self, dataset_id: str, group_id: str) -> str:
@@ -65,10 +101,17 @@ class PowerBIHook(BaseHook):
 
         return request_id
 
-    def _get_token(self) -> str:
+    def _get_credential(self) -> ClientSecretCredential:
         """
-        Retrieve the access token used to authenticate against the API.
+        Return the Azure AD credential of this hook, creating it on first use.
+
+        The credential caches the access token until it expires, so the token is
+        not requested again for every API call. Token requests are retried by the
+        Azure SDK and get the same timeouts as the Power BI requests.
         """
+        if self._credential is not None:
+            return self._credential
+
         connection = self.get_connection(self.conn_id)
         client_id = connection.login
         client_secret = connection.password
@@ -82,15 +125,23 @@ class PowerBIHook(BaseHook):
         if not tenant_id:
             raise ValueError("The key tenant_id (or tenantId) is missing in the extra field")
 
-        credential = ClientSecretCredential(
+        self._credential = ClientSecretCredential(
             client_id=client_id,
             client_secret=client_secret,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            retry_total=self._retry.total,
+            connection_timeout=self._timeout[0],
+            read_timeout=self._timeout[1],
         )
+        return self._credential
 
+    def _get_token(self) -> str:
+        """
+        Retrieve the access token used to authenticate against the API.
+        """
         scope = "https://analysis.windows.net/powerbi/api/.default"
 
-        access_token = credential.get_token(scope)
+        access_token = self._get_credential().get_token(scope)
 
         return access_token.token
 
@@ -188,12 +239,28 @@ class PowerBIHook(BaseHook):
         :param check_interval: Time in seconds to check on a dataset refresh's status.
         :param timeout: Time in seconds to wait for a dataset to reach a terminal status or the expected status.
         :return: Boolean indicating if the dataset refresh has reached the ``expected_status`` before the timeout.
-        """
-        dataset_refresh_details = self.get_refresh_details_by_request_id(request_id=request_id)
 
+        Transient errors (see :func:`is_transient_error`) while checking the status
+        are logged and the check is repeated on the next interval, so a temporary
+        outage does not fail a long running refresh.
+        """
         start_time = time.monotonic()
 
-        while dataset_refresh_details.status not in ["Failed", "Completed", expected_status]:
+        while True:
+            try:
+                status = self.get_refresh_details_by_request_id(request_id=request_id).status
+            except (requests.RequestException, ServiceRequestError, ServiceResponseError) as error:
+                if not is_transient_error(error):
+                    raise
+                self.log.warning(
+                    "Unable to check the status of dataset refresh %s, retrying in %s seconds: %s",
+                    request_id, check_interval, error,
+                )
+                status = None
+
+            if status in ["Failed", "Completed", expected_status]:
+                return status in expected_status
+
             # Check if the dataset-refresh duration has exceeded the ``timeout`` configured.
             if start_time + timeout < time.monotonic():
                 raise PowerBIDatasetRefreshException(
@@ -201,12 +268,6 @@ class PowerBIHook(BaseHook):
                 )
 
             time.sleep(check_interval)
-
-            dataset_refresh_details: PowerBiDatasetRefreshDetails = self.get_refresh_details_by_request_id(
-                request_id=request_id
-            )
-
-        return dataset_refresh_details.status in expected_status
 
     def trigger_dataset_refresh(self, wait_for_termination: bool) -> str:
         """
@@ -230,6 +291,18 @@ class PowerBIHook(BaseHook):
 
         return request_id
 
+    def _get_session(self) -> requests.Session:
+        """
+        Return the HTTP session of this hook, creating it on first use.
+
+        The session is reused across requests so polling keeps the connection
+        alive instead of doing a new TCP/TLS handshake on every call.
+        """
+        if self._session is None:
+            self._session = requests.Session()
+            self._session.mount("https://", HTTPAdapter(max_retries=self._retry))
+        return self._session
+
     def _send_request(self, request_type: str, url: str, **kwargs) -> requests.Response:
         """
         Send a request to the Power BI REST API.
@@ -241,6 +314,10 @@ class PowerBIHook(BaseHook):
         initialisation of the hook to prevent a Power BI API call each time
         the Airflow scheduler refreshes the DAGS.
 
+        Requests are sent through a session that retries transient failures
+        (connection resets, timeouts, HTTP 429/5xx) with exponential backoff and
+        honours the ``Retry-After`` header. A timeout is applied unless one is
+        passed in ``kwargs``.
 
         :param request_type: Request type (GET, POST, PUT etc.).
         :param url: The URL against which the request needs to be made.
@@ -248,14 +325,14 @@ class PowerBIHook(BaseHook):
         """
         self.header = {"Authorization": f"Bearer {self._get_token()}"}
 
-        request_funcs = {"GET": requests.get, "POST": requests.post}
+        method = request_type.upper()
 
-        func = request_funcs.get(request_type.upper())
+        if method not in ("GET", "POST"):
+            raise AirflowException(f"Request type of {method} not supported.")
 
-        if not func:
-            raise AirflowException(f"Request type of {request_type.upper()} not supported.")
+        kwargs.setdefault("timeout", self._timeout)
 
-        response = func(url=url, headers=self.header, **kwargs)
+        response = self._get_session().request(method, url=url, headers=self.header, **kwargs)
 
         if response.ok:
             return response

@@ -1,7 +1,11 @@
 """Sensor for polling the status of a previously triggered Power BI dataset refresh."""
-from airflow.sdk.bases.sensor import BaseSensorOperator
+from functools import cached_property
 
-from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook
+import requests  # type: ignore
+from airflow.sdk.bases.sensor import BaseSensorOperator
+from azure.core.exceptions import ServiceRequestError, ServiceResponseError
+
+from PowerBI_Operator.hooks.powerbi_hook import PowerBIHook, is_transient_error
 from PowerBI_Operator.models.powerbi_models import PowerBIDatasetRefreshException, PowerBiDatasetRefreshDetails
 
 
@@ -51,29 +55,45 @@ class PowerBIDatasetRefreshSensor(BaseSensorOperator):
         self.conn_id = conn_id
         self.xcom_task_id = xcom_task_id
 
+    @cached_property
+    def hook(self) -> PowerBIHook:
+        """
+        Create and return an PowerBIHook (cached), so its HTTP session and token are reused between pokes.
+        """
+        return PowerBIHook(
+            conn_id=self.conn_id,
+            dataset_id=self.dataset_id,
+            group_id=self.group_id
+        )
+
     def poke(self, context):
         """
         Check whether the dataset refresh has reached a terminal status.
 
         Pushes the terminal status to XCom under ``powerbi_dataset_refresh_status``
         and raises :class:`~PowerBI_Operator.models.powerbi_models.PowerBIDatasetRefreshException`
-        if the refresh failed.
+        if the refresh failed. Transient errors (see
+        :func:`~PowerBI_Operator.hooks.powerbi_hook.is_transient_error`) are logged
+        and the status is checked again on the next poke.
 
         :param context: Airflow task instance context, used to pull the refresh request id from XCom.
         :return: ``True`` once the refresh has reached a terminal status (``Failed`` or ``Completed``).
         """
-        hook = PowerBIHook(
-            conn_id=self.conn_id,
-            dataset_id=self.dataset_id,
-            group_id=self.group_id
-        )
-
         refresh_id = context["task_instance"].xcom_pull(
             task_ids=self.xcom_task_id,
             key="powerbi_dataset_refresh_id"
         )
 
-        refresh_status_details: PowerBiDatasetRefreshDetails = hook.get_refresh_details_by_request_id(refresh_id)
+        try:
+            refresh_status_details: PowerBiDatasetRefreshDetails = self.hook.get_refresh_details_by_request_id(
+                refresh_id
+            )
+        except (requests.RequestException, ServiceRequestError, ServiceResponseError) as error:
+            if not is_transient_error(error):
+                raise
+            self.log.warning(f"Unable to check the status of dataset refresh {refresh_id}, retrying: {error}")
+            return False
+
         refresh_status: str = refresh_status_details.status
 
         self.log.info(f"Current status: {refresh_status}")
